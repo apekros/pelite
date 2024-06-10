@@ -6,6 +6,7 @@ use std::prelude::v1::*;
 
 use std::{cmp, slice};
 
+use crate::util::AlignTo;
 use crate::Result;
 
 use super::image::*;
@@ -90,9 +91,9 @@ impl<'a> PeView<'a> {
 	}
 	/// Converts the view to file alignment.
 	pub fn to_file(self) -> Vec<u8> {
-		let (sizeof_headers, sizeof_image) = {
+		let (sizeof_headers, sizeof_image, section_alignment) = {
 			let optional_header = self.optional_header();
-			(optional_header.SizeOfHeaders, optional_header.SizeOfImage)
+			(optional_header.SizeOfHeaders, optional_header.SizeOfImage, optional_header.SectionAlignment)
 		};
 
 		// Figure out the size of the file image
@@ -118,10 +119,10 @@ impl<'a> PeView<'a> {
 		// Copy the section image data
 		for section in self.section_headers() {
 			let dest = vec.get_mut(section.PointerToRawData as usize..u32::wrapping_add(section.PointerToRawData, section.SizeOfRawData) as usize);
-			let src = image.get(section.VirtualAddress as usize..u32::wrapping_add(section.VirtualAddress, section.VirtualSize) as usize);
+			let src = image.get(section.VirtualAddress as usize..u32::wrapping_add(section.VirtualAddress, section.VirtualSize).align_to(section_alignment) as usize);
 			// Skip invalid sections...
 			if let (Some(dest), Some(src)) = (dest, src) {
-				dest.copy_from_slice(src);
+				dest.copy_from_slice(&src[..dest.len()]);
 			}
 		}
 
